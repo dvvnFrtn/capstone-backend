@@ -15,6 +15,8 @@ type (
 
 const (
 	Unexpected Code = iota
+	RateLimit
+	OTPExpired
 	BadRequest
 	NotFound
 	Conflict
@@ -27,6 +29,8 @@ func (c Code) String() string {
 	switch c {
 	case Conflict:
 		return "resource_already_exists"
+	case OTPExpired:
+		return "token_expired"
 	case Unexpected:
 		return "unexpected"
 	case Internal:
@@ -39,6 +43,8 @@ func (c Code) String() string {
 		return "invalid_request"
 	case NotFound:
 		return "resource_not_found"
+	case RateLimit:
+		return "too_many_request"
 	default:
 		return "unknown_error"
 	}
