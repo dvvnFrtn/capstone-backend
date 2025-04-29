@@ -3,13 +3,18 @@ package app
 import (
 	"context"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/dvvnFrtn/capstone-backend/config"
+	"github.com/dvvnFrtn/capstone-backend/infra/db"
 	"github.com/dvvnFrtn/capstone-backend/internal/handler"
+	"github.com/dvvnFrtn/capstone-backend/internal/service"
+	"github.com/dvvnFrtn/capstone-backend/pkg/authx"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -21,8 +26,21 @@ func Run() {
 		log.Println("success loading .env file")
 	}
 
-	router := gin.Default()
-	handler.Register(router)
+	cfg := config.Database()
+	conn, err := db.NewPostgreConn(context.Background(), &cfg)
+	if err != nil {
+		log.Fatal("failed to connect database: ", err)
+	}
+
+	var (
+		router      = gin.Default()
+		authClient  = authx.NewSupabase()
+		authService = service.NewSupabaseAuthService(authClient)
+		userService = service.NewUserService(conn, authService)
+		userHandler = handler.NewUserHandler(slog.Default(), userService)
+	)
+
+	handler.Register(router, userHandler)
 	server := &http.Server{
 		Addr:    os.Getenv("APP_HOST"),
 		Handler: router,
