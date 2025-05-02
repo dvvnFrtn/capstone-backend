@@ -33,6 +33,9 @@ func SendRESTError(ctx *gin.Context, logger *slog.Logger, err error) {
 		resp.Message = string(apperr.Msg)
 		resp.Code = apperr.Code.String()
 		status = mapAppError(apperr)
+		if resp.Message == "" && status != 500 {
+			resp.Message = apperr.Error()
+		}
 	} else {
 		resp.Message = "Terjadi kesalahan pada server"
 		resp.Code = errs.Internal.String()

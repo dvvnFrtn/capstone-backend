@@ -2,15 +2,15 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"time"
 
 	"github.com/dvvnFrtn/capstone-backend/infra/db"
 	database "github.com/dvvnFrtn/capstone-backend/infra/db/sqlc"
 	"github.com/dvvnFrtn/capstone-backend/pkg/errs"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type UserService struct {
@@ -26,17 +26,15 @@ func NewUserService(conn *pgx.Conn, as AuthService) UserService {
 }
 
 type AdminRegistrationRequest struct {
-	Email       string    `json:"email"`
-	Password    string    `json:"password"`
-	Fullname    string    `json:"fullname"`
-	DOB         time.Time `json:"date_of_birth"`
-	Gender      string    `json:"gender"`
-	RtNumber    int32     `json:"rt_number"`
-	RwNumber    int32     `json:"rw_number"`
-	Subdistrict string    `json:"subdistrict"`
-	District    string    `json:"district"`
-	City        string    `json:"city"`
-	Province    string    `json:"province"`
+	Email       string `json:"email" binding:"required"`
+	Password    string `json:"password" binding:"required"`
+	Fullname    string `json:"fullname" binding:"required"`
+	RtNumber    int32  `json:"rt_number" binding:"required"`
+	RwNumber    int32  `json:"rw_number" binding:"required"`
+	Subdistrict string `json:"subdistrict" binding:"required"`
+	District    string `json:"district" binding:"required"`
+	City        string `json:"city" binding:"required"`
+	Province    string `json:"province" binding:"required"`
 }
 
 type AdminRegistrationResponse struct {
@@ -104,8 +102,6 @@ func (s *UserService) createAdminCommunity(ctx context.Context, conn *pgx.Conn, 
 			ID:          admID,
 			CommunityID: comID,
 			Fullname:    req.Fullname,
-			Dob:         pgtype.Date{Time: req.DOB, Valid: !req.DOB.IsZero()},
-			Gender:      req.Gender,
 			Role:        "admin",
 			IsConfirmed: false,
 		}); err != nil {
@@ -119,4 +115,111 @@ func (s *UserService) createAdminCommunity(ctx context.Context, conn *pgx.Conn, 
 	}
 
 	return admID, comID, nil
+}
+
+func (s *UserService) VerifySignUp(ctx context.Context, req VerifyOTPRequest) (*VerifyOTPResponse, error) {
+	const op errs.Op = "service.user.VerifySignUp"
+
+	result, err := s.authService.VerifyOTP(VerifyOTPRequest{
+		Type:  "signup",
+		Token: req.Token,
+		Email: req.Email,
+	})
+	if err != nil {
+		return nil, errs.New(op, err)
+	}
+
+	if err := db.RunTransaction(ctx, s.conn, func(q *database.Queries) error {
+		if err := q.UpdateUserStatus(ctx, database.UpdateUserStatusParams{
+			IsConfirmed: true,
+			ID:          result.ID,
+		}); err != nil {
+			return errs.New(op, errs.Internal, fmt.Errorf("failed to update admin status: %w", err))
+		}
+
+		if err := q.UpdateCommunityStatus(ctx, database.UpdateCommunityStatusParams{
+			IsConfirmed: true,
+			ID:          result.ID,
+		}); err != nil {
+			return errs.New(op, errs.Internal, fmt.Errorf("failed to update community status: %w", err))
+		}
+		return nil
+	}); err != nil {
+		return nil, errs.New(op, err)
+	}
+
+	return result, nil
+}
+
+func (s *UserService) UserLogin(ctx context.Context, req LoginRequest) (*LoginResponse, error) {
+	const op errs.Op = "service.user.UserLogin"
+
+	result, err := s.authService.Login(LoginRequest{
+		Email:    req.Email,
+		Password: req.Password,
+	})
+	if err != nil {
+		return nil, errs.New(op, err)
+	}
+
+	if !s.IsUserExists(ctx, result.ID) {
+		return nil, errs.New(op, err, errs.Msg("Pengguna tidak ditemukan"))
+	}
+
+	return &LoginResponse{
+		ID:           result.ID,
+		AccessToken:  result.AccessToken,
+		RefreshToken: result.RefreshToken,
+	}, nil
+}
+
+type CommunityResponse struct {
+	ID          uuid.UUID `json:"id"`
+	RtNumber    int32     `json:"rt_number"`
+	RwNumber    int32     `json:"rw_number"`
+	Subdistrict string    `json:"subdistrict"`
+	District    string    `json:"district"`
+	City        string    `json:"city"`
+	Province    string    `json:"province"`
+}
+
+type UserResponse struct {
+	ID        uuid.UUID         `json:"id"`
+	Fullname  string            `json:"fullname"`
+	Email     string            `json:"email"`
+	Role      string            `json:"role"`
+	Community CommunityResponse `json:"community"`
+}
+
+func (s *UserService) GetAuthenticatedUser(ctx context.Context, claims jwt.MapClaims) (*UserResponse, error) {
+	const op errs.Op = "service.user.GetAuthenticatedUser"
+
+	uID := claims["sub"].(string)
+	email := claims["email"].(string)
+
+	queries := database.New(s.conn)
+
+	row, err := queries.FindUserByID(ctx, uuid.MustParse(uID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errs.New(op, err, errs.NotFound, errs.Msg("Pengguna tidak dapat ditemukan"))
+		}
+		return nil, errs.New(op, err, errs.Internal, fmt.Errorf("failed to select user rows: %w", err))
+	}
+
+	return &UserResponse{
+		ID:       row.ID,
+		Fullname: row.Fullname,
+		Email:    email,
+		Role:     row.Role,
+		Community: CommunityResponse{
+			ID:          row.CommunityID,
+			RtNumber:    row.RtNumber,
+			RwNumber:    row.RwNumber,
+			Subdistrict: row.Subdistrict,
+			District:    row.District,
+			City:        row.City,
+			Province:    row.Province,
+		},
+	}, nil
 }

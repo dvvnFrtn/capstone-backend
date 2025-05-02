@@ -13,6 +13,7 @@ import (
 type AuthService interface {
 	Signup(req SignupRequest) (*SignupResponse, error)
 	VerifyOTP(req VerifyOTPRequest) (*VerifyOTPResponse, error)
+	Login(req LoginRequest) (*LoginResponse, error)
 }
 
 type supabaseAuthService struct {
@@ -68,8 +69,9 @@ type VerifyOTPRequest struct {
 }
 
 type VerifyOTPResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+	ID           uuid.UUID `json:"_"`
+	AccessToken  string    `json:"access_token"`
+	RefreshToken string    `json:"refresh_token"`
 }
 
 func (s *supabaseAuthService) VerifyOTP(req VerifyOTPRequest) (*VerifyOTPResponse, error) {
@@ -90,6 +92,37 @@ func (s *supabaseAuthService) VerifyOTP(req VerifyOTPRequest) (*VerifyOTPRespons
 		}
 	}
 	return &VerifyOTPResponse{
+		ID:           result.User.ID,
+		AccessToken:  result.AccessToken,
+		RefreshToken: result.RefreshToken,
+	}, nil
+}
+
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type LoginResponse struct {
+	ID           uuid.UUID `json:"_"`
+	AccessToken  string    `json:"access_token"`
+	RefreshToken string    `json:"refresh_token"`
+}
+
+func (s *supabaseAuthService) Login(req LoginRequest) (*LoginResponse, error) {
+	const op errs.Op = "service.auth.Login"
+
+	result, err := s.client.SignInWithEmailPassword(req.Email, req.Password)
+	if err != nil {
+		parsedErr, parseErr := parseSupabaseAuthError(err)
+		if parseErr != nil {
+			return nil, errs.New(op, errs.Internal, err)
+		} else {
+			return nil, mapSupabaseAuthError(op, parsedErr, err)
+		}
+	}
+	return &LoginResponse{
+		ID:           result.User.ID,
 		AccessToken:  result.AccessToken,
 		RefreshToken: result.RefreshToken,
 	}, nil

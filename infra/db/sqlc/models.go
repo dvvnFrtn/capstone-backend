@@ -25,8 +25,6 @@ type Community struct {
 type User struct {
 	ID          uuid.UUID        `json:"id"`
 	Fullname    string           `json:"fullname"`
-	Dob         pgtype.Date      `json:"dob"`
-	Gender      string           `json:"gender"`
 	Role        string           `json:"role"`
 	IsConfirmed bool             `json:"is_confirmed"`
 	CreatedAt   pgtype.Timestamp `json:"created_at"`
