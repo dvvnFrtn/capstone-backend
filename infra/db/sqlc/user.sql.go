@@ -9,15 +9,41 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const findUserByID = `-- name: FindUserByID :one
-select u.id, u.fullname, u.role, u.is_confirmed, u.created_at, u.updated_at, u.community_id from users u where u.id = $1
+select
+  u.id, u.fullname, u.role, u.is_confirmed, u.created_at, u.updated_at, u.community_id,
+  c.id, c.rt_number, c.rw_number, c.subdistrict, c.district, c.city, c.province, c.is_confirmed, c.created_at, c.updated_at
+from users u
+inner join communities c on c.id = u.community_id
+where u.id = $1
 `
 
-func (q *Queries) FindUserByID(ctx context.Context, id uuid.UUID) (User, error) {
+type FindUserByIDRow struct {
+	ID            uuid.UUID        `json:"id"`
+	Fullname      string           `json:"fullname"`
+	Role          string           `json:"role"`
+	IsConfirmed   bool             `json:"is_confirmed"`
+	CreatedAt     pgtype.Timestamp `json:"created_at"`
+	UpdatedAt     pgtype.Timestamp `json:"updated_at"`
+	CommunityID   uuid.UUID        `json:"community_id"`
+	ID_2          uuid.UUID        `json:"id_2"`
+	RtNumber      int32            `json:"rt_number"`
+	RwNumber      int32            `json:"rw_number"`
+	Subdistrict   string           `json:"subdistrict"`
+	District      string           `json:"district"`
+	City          string           `json:"city"`
+	Province      string           `json:"province"`
+	IsConfirmed_2 bool             `json:"is_confirmed_2"`
+	CreatedAt_2   pgtype.Timestamp `json:"created_at_2"`
+	UpdatedAt_2   pgtype.Timestamp `json:"updated_at_2"`
+}
+
+func (q *Queries) FindUserByID(ctx context.Context, id uuid.UUID) (FindUserByIDRow, error) {
 	row := q.db.QueryRow(ctx, findUserByID, id)
-	var i User
+	var i FindUserByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.Fullname,
@@ -26,6 +52,16 @@ func (q *Queries) FindUserByID(ctx context.Context, id uuid.UUID) (User, error) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CommunityID,
+		&i.ID_2,
+		&i.RtNumber,
+		&i.RwNumber,
+		&i.Subdistrict,
+		&i.District,
+		&i.City,
+		&i.Province,
+		&i.IsConfirmed_2,
+		&i.CreatedAt_2,
+		&i.UpdatedAt_2,
 	)
 	return i, err
 }

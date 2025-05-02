@@ -22,7 +22,12 @@ insert into communities (
 returning id;
 
 -- name: FindUserByID :one
-select u.* from users u where u.id = $1;
+select
+  u.*,
+  c.*
+from users u
+inner join communities c on c.id = u.community_id
+where u.id = $1;
 
 -- name: UpdateUserStatus :exec
 update users

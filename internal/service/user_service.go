@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/dvvnFrtn/capstone-backend/infra/db"
 	database "github.com/dvvnFrtn/capstone-backend/infra/db/sqlc"
 	"github.com/dvvnFrtn/capstone-backend/pkg/errs"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -168,5 +170,56 @@ func (s *UserService) UserLogin(ctx context.Context, req LoginRequest) (*LoginRe
 		ID:           result.ID,
 		AccessToken:  result.AccessToken,
 		RefreshToken: result.RefreshToken,
+	}, nil
+}
+
+type CommunityResponse struct {
+	ID          uuid.UUID `json:"id"`
+	RtNumber    int32     `json:"rt_number"`
+	RwNumber    int32     `json:"rw_number"`
+	Subdistrict string    `json:"subdistrict"`
+	District    string    `json:"district"`
+	City        string    `json:"city"`
+	Province    string    `json:"province"`
+}
+
+type UserResponse struct {
+	ID        uuid.UUID         `json:"id"`
+	Fullname  string            `json:"fullname"`
+	Email     string            `json:"email"`
+	Role      string            `json:"role"`
+	Community CommunityResponse `json:"community"`
+}
+
+func (s *UserService) GetAuthenticatedUser(ctx context.Context, claims jwt.MapClaims) (*UserResponse, error) {
+	const op errs.Op = "service.user.GetAuthenticatedUser"
+
+	uID := claims["sub"].(string)
+	email := claims["email"].(string)
+
+	queries := database.New(s.conn)
+
+	row, err := queries.FindUserByID(ctx, uuid.MustParse(uID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errs.New(op, err, errs.NotFound, errs.Msg("Pengguna tidak dapat ditemukan"))
+		}
+		return nil, errs.New(op, err, errs.Internal, fmt.Errorf("failed to select user rows: %w", err))
+	}
+
+	return &UserResponse{
+		ID:       row.ID,
+		Fullname: row.Fullname,
+		Email:    email,
+		Role:     row.Role,
+		Community: CommunityResponse{
+			ID:          row.CommunityID,
+			RtNumber:    row.RtNumber,
+			RwNumber:    row.RwNumber,
+			Subdistrict: row.Subdistrict,
+			District:    row.District,
+			City:        row.City,
+			Province:    row.Province,
+		},
 	}, nil
 }
