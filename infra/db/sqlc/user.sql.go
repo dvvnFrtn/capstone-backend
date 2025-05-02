@@ -9,11 +9,10 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const findUserByID = `-- name: FindUserByID :one
-select u.id, u.fullname, u.dob, u.gender, u.role, u.is_confirmed, u.created_at, u.updated_at, u.community_id from users u where u.id = $1
+select u.id, u.fullname, u.role, u.is_confirmed, u.created_at, u.updated_at, u.community_id from users u where u.id = $1
 `
 
 func (q *Queries) FindUserByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -22,8 +21,6 @@ func (q *Queries) FindUserByID(ctx context.Context, id uuid.UUID) (User, error) 
 	err := row.Scan(
 		&i.ID,
 		&i.Fullname,
-		&i.Dob,
-		&i.Gender,
 		&i.Role,
 		&i.IsConfirmed,
 		&i.CreatedAt,
@@ -79,22 +76,18 @@ insert into users (
     id,
     community_id,
     fullname,
-    dob,
-    gender,
     role,
     is_confirmed
-) values ($1, $2, $3, $4, $5, $6, $7)
+) values ($1, $2, $3, $4, $5)
 returning id
 `
 
 type InsertUserParams struct {
-	ID          uuid.UUID   `json:"id"`
-	CommunityID uuid.UUID   `json:"community_id"`
-	Fullname    string      `json:"fullname"`
-	Dob         pgtype.Date `json:"dob"`
-	Gender      string      `json:"gender"`
-	Role        string      `json:"role"`
-	IsConfirmed bool        `json:"is_confirmed"`
+	ID          uuid.UUID `json:"id"`
+	CommunityID uuid.UUID `json:"community_id"`
+	Fullname    string    `json:"fullname"`
+	Role        string    `json:"role"`
+	IsConfirmed bool      `json:"is_confirmed"`
 }
 
 func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (uuid.UUID, error) {
@@ -102,8 +95,6 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (uuid.UU
 		arg.ID,
 		arg.CommunityID,
 		arg.Fullname,
-		arg.Dob,
-		arg.Gender,
 		arg.Role,
 		arg.IsConfirmed,
 	)

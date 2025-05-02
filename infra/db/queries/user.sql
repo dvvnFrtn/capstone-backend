@@ -3,11 +3,9 @@ insert into users (
     id,
     community_id,
     fullname,
-    dob,
-    gender,
     role,
     is_confirmed
-) values ($1, $2, $3, $4, $5, $6, $7)
+) values ($1, $2, $3, $4, $5)
 returning id;
 
 -- name: InsertCommunity :one

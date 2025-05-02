@@ -3,14 +3,12 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/dvvnFrtn/capstone-backend/infra/db"
 	database "github.com/dvvnFrtn/capstone-backend/infra/db/sqlc"
 	"github.com/dvvnFrtn/capstone-backend/pkg/errs"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type UserService struct {
@@ -26,17 +24,15 @@ func NewUserService(conn *pgx.Conn, as AuthService) UserService {
 }
 
 type AdminRegistrationRequest struct {
-	Email       string    `json:"email"`
-	Password    string    `json:"password"`
-	Fullname    string    `json:"fullname"`
-	DOB         time.Time `json:"date_of_birth"`
-	Gender      string    `json:"gender"`
-	RtNumber    int32     `json:"rt_number"`
-	RwNumber    int32     `json:"rw_number"`
-	Subdistrict string    `json:"subdistrict"`
-	District    string    `json:"district"`
-	City        string    `json:"city"`
-	Province    string    `json:"province"`
+	Email       string `json:"email" binding:"required"`
+	Password    string `json:"password" binding:"required"`
+	Fullname    string `json:"fullname" binding:"required"`
+	RtNumber    int32  `json:"rt_number" binding:"required"`
+	RwNumber    int32  `json:"rw_number" binding:"required"`
+	Subdistrict string `json:"subdistrict" binding:"required"`
+	District    string `json:"district" binding:"required"`
+	City        string `json:"city" binding:"required"`
+	Province    string `json:"province" binding:"required"`
 }
 
 type AdminRegistrationResponse struct {
@@ -104,8 +100,6 @@ func (s *UserService) createAdminCommunity(ctx context.Context, conn *pgx.Conn, 
 			ID:          admID,
 			CommunityID: comID,
 			Fullname:    req.Fullname,
-			Dob:         pgtype.Date{Time: req.DOB, Valid: !req.DOB.IsZero()},
-			Gender:      req.Gender,
 			Role:        "admin",
 			IsConfirmed: false,
 		}); err != nil {

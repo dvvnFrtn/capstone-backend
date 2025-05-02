@@ -41,7 +41,7 @@ func (h *UserHandler) AdminSignup(ctx *gin.Context) {
 		response.SendRESTSuccess(ctx, http.StatusOK, "Registrasi berhasil, silahkan cek email anda", res)
 		return
 	} else {
-		response.SendRESTSuccess(ctx, http.StatusNoContent, "Silahkan cek email anda", nil)
+		response.SendRESTSuccess(ctx, http.StatusOK, "Registrasi berhasil, silahkan cek email anda", nil)
 		return
 	}
 }

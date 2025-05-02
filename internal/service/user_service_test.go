@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/dvvnFrtn/capstone-backend/config"
 	"github.com/dvvnFrtn/capstone-backend/infra/db"
@@ -15,7 +14,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,8 +48,6 @@ func dummyAdminRegistrationRequest(email, passw string) service.AdminRegistratio
 		Email:       email,
 		Password:    passw,
 		Fullname:    "user test",
-		DOB:         time.Date(2004, 05, 28, 0, 0, 0, 0, time.Local),
-		Gender:      "laki-laki",
 		RtNumber:    1,
 		RwNumber:    1,
 		Subdistrict: "test",
@@ -173,8 +169,6 @@ func seedAdminCommunity(conn *pgx.Conn, admID, comID uuid.UUID) error {
 		ID:          admID,
 		CommunityID: comID,
 		Fullname:    "test",
-		Dob:         pgtype.Date{Time: time.Now(), Valid: true},
-		Gender:      "test",
 		Role:        "admin",
 		IsConfirmed: false,
 	})
