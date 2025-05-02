@@ -114,3 +114,37 @@ func (s *UserService) createAdminCommunity(ctx context.Context, conn *pgx.Conn, 
 
 	return admID, comID, nil
 }
+
+func (s *UserService) VerifySignUp(ctx context.Context, req VerifyOTPRequest) (*VerifyOTPResponse, error) {
+	const op errs.Op = "service.user.VerifySignUp"
+
+	result, err := s.authService.VerifyOTP(VerifyOTPRequest{
+		Type:  "signup",
+		Token: req.Token,
+		Email: req.Email,
+	})
+	if err != nil {
+		return nil, errs.New(op, err)
+	}
+
+	if err := db.RunTransaction(ctx, s.conn, func(q *database.Queries) error {
+		if err := q.UpdateUserStatus(ctx, database.UpdateUserStatusParams{
+			IsConfirmed: true,
+			ID:          result.ID,
+		}); err != nil {
+			return errs.New(op, errs.Internal, fmt.Errorf("failed to update admin status: %w", err))
+		}
+
+		if err := q.UpdateCommunityStatus(ctx, database.UpdateCommunityStatusParams{
+			IsConfirmed: true,
+			ID:          result.ID,
+		}); err != nil {
+			return errs.New(op, errs.Internal, fmt.Errorf("failed to update community status: %w", err))
+		}
+		return nil
+	}); err != nil {
+		return nil, errs.New(op, err)
+	}
+
+	return result, nil
+}

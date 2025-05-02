@@ -68,8 +68,9 @@ type VerifyOTPRequest struct {
 }
 
 type VerifyOTPResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+	ID           uuid.UUID `json:"_"`
+	AccessToken  string    `json:"access_token"`
+	RefreshToken string    `json:"refresh_token"`
 }
 
 func (s *supabaseAuthService) VerifyOTP(req VerifyOTPRequest) (*VerifyOTPResponse, error) {
@@ -90,6 +91,7 @@ func (s *supabaseAuthService) VerifyOTP(req VerifyOTPRequest) (*VerifyOTPRespons
 		}
 	}
 	return &VerifyOTPResponse{
+		ID:           result.User.ID,
 		AccessToken:  result.AccessToken,
 		RefreshToken: result.RefreshToken,
 	}, nil

@@ -45,3 +45,21 @@ func (h *UserHandler) AdminSignup(ctx *gin.Context) {
 		return
 	}
 }
+
+func (h *UserHandler) VerifyOTP(ctx *gin.Context) {
+	const op errs.Op = "handler.user.VerifyOTP"
+
+	var req service.VerifyOTPRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		response.SendRESTError(ctx, h.logger, errs.New(op, errs.BadRequest, errs.Msg("Request tidak valid"), err))
+		return
+	}
+
+	res, err := h.userService.VerifySignUp(ctx, req)
+	if err != nil {
+		response.SendRESTError(ctx, h.logger, err)
+		return
+	}
+
+	response.SendRESTSuccess(ctx, http.StatusOK, "Verifikasi email telah berhasil", res)
+}

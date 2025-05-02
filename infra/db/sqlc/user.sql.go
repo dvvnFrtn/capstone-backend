@@ -102,3 +102,39 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (uuid.UU
 	err := row.Scan(&id)
 	return id, err
 }
+
+const updateCommunityStatus = `-- name: UpdateCommunityStatus :exec
+update communities
+set is_confirmed = $1
+where id = (
+  select u.community_id
+  from users u
+  where u.id = $2
+)
+`
+
+type UpdateCommunityStatusParams struct {
+	IsConfirmed bool      `json:"is_confirmed"`
+	ID          uuid.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateCommunityStatus(ctx context.Context, arg UpdateCommunityStatusParams) error {
+	_, err := q.db.Exec(ctx, updateCommunityStatus, arg.IsConfirmed, arg.ID)
+	return err
+}
+
+const updateUserStatus = `-- name: UpdateUserStatus :exec
+update users
+set is_confirmed = $1
+where id = $2
+`
+
+type UpdateUserStatusParams struct {
+	IsConfirmed bool      `json:"is_confirmed"`
+	ID          uuid.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) error {
+	_, err := q.db.Exec(ctx, updateUserStatus, arg.IsConfirmed, arg.ID)
+	return err
+}

@@ -23,3 +23,17 @@ returning id;
 
 -- name: FindUserByID :one
 select u.* from users u where u.id = $1;
+
+-- name: UpdateUserStatus :exec
+update users
+set is_confirmed = $1
+where id = $2;
+
+-- name: UpdateCommunityStatus :exec
+update communities
+set is_confirmed = $1
+where id = (
+  select u.community_id
+  from users u
+  where u.id = $2
+);
