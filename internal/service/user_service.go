@@ -148,3 +148,25 @@ func (s *UserService) VerifySignUp(ctx context.Context, req VerifyOTPRequest) (*
 
 	return result, nil
 }
+
+func (s *UserService) UserLogin(ctx context.Context, req LoginRequest) (*LoginResponse, error) {
+	const op errs.Op = "service.user.UserLogin"
+
+	result, err := s.authService.Login(LoginRequest{
+		Email:    req.Email,
+		Password: req.Password,
+	})
+	if err != nil {
+		return nil, errs.New(op, err)
+	}
+
+	if !s.IsUserExists(ctx, result.ID) {
+		return nil, errs.New(op, err, errs.Msg("Pengguna tidak ditemukan"))
+	}
+
+	return &LoginResponse{
+		ID:           result.ID,
+		AccessToken:  result.AccessToken,
+		RefreshToken: result.RefreshToken,
+	}, nil
+}

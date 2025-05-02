@@ -63,3 +63,21 @@ func (h *UserHandler) VerifyOTP(ctx *gin.Context) {
 
 	response.SendRESTSuccess(ctx, http.StatusOK, "Verifikasi email telah berhasil", res)
 }
+
+func (h *UserHandler) UserLogin(ctx *gin.Context) {
+	const op errs.Op = "handler.user.UserLogin"
+
+	var req service.LoginRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		response.SendRESTError(ctx, h.logger, errs.New(op, errs.BadRequest, errs.Msg("Request tidak valid"), err))
+		return
+	}
+
+	res, err := h.userService.UserLogin(ctx, req)
+	if err != nil {
+		response.SendRESTError(ctx, h.logger, err)
+		return
+	}
+
+	response.SendRESTSuccess(ctx, http.StatusOK, "Login telah berhasil", res)
+}

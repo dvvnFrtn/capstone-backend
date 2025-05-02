@@ -7,4 +7,5 @@ import (
 func Register(r *gin.Engine, uh UserHandler) {
 	r.POST("/api/auth/signup", uh.AdminSignup)
 	r.POST("/api/auth/signup/verify", uh.VerifyOTP)
+	r.POST("/api/auth/signin", uh.UserLogin)
 }
