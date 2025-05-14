@@ -12,43 +12,157 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const findUserByID = `-- name: FindUserByID :one
-select
-  u.id, u.fullname, u.role, u.is_confirmed, u.created_at, u.updated_at, u.community_id,
-  c.id, c.rt_number, c.rw_number, c.subdistrict, c.district, c.city, c.province, c.is_confirmed, c.created_at, c.updated_at
-from users u
-inner join communities c on c.id = u.community_id
-where u.id = $1
+const deleteUser = `-- name: DeleteUser :exec
+delete from users
+where id = $1
 `
 
-type FindUserByIDRow struct {
-	ID            uuid.UUID        `json:"id"`
-	Fullname      string           `json:"fullname"`
-	Role          string           `json:"role"`
-	IsConfirmed   bool             `json:"is_confirmed"`
-	CreatedAt     pgtype.Timestamp `json:"created_at"`
-	UpdatedAt     pgtype.Timestamp `json:"updated_at"`
-	CommunityID   uuid.UUID        `json:"community_id"`
-	ID_2          uuid.UUID        `json:"id_2"`
-	RtNumber      int32            `json:"rt_number"`
-	RwNumber      int32            `json:"rw_number"`
-	Subdistrict   string           `json:"subdistrict"`
-	District      string           `json:"district"`
-	City          string           `json:"city"`
-	Province      string           `json:"province"`
-	IsConfirmed_2 bool             `json:"is_confirmed_2"`
-	CreatedAt_2   pgtype.Timestamp `json:"created_at_2"`
-	UpdatedAt_2   pgtype.Timestamp `json:"updated_at_2"`
+func (q *Queries) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteUser, id)
+	return err
 }
 
-func (q *Queries) FindUserByID(ctx context.Context, id uuid.UUID) (FindUserByIDRow, error) {
-	row := q.db.QueryRow(ctx, findUserByID, id)
+const findUserByCommunityID = `-- name: FindUserByCommunityID :many
+select
+  u.id, u.fullname, u.email, u.phone, u.address, u.role, u.created_at, u.updated_at, u.community_id,
+  c.id, c.rt_number, c.rw_number, c.subdistrict, c.district, c.city, c.province, c.created_at, c.updated_at
+from users u
+inner join communities c on c.id = u.community_id
+where
+  u.community_id = $1
+`
+
+type FindUserByCommunityIDRow struct {
+	ID          uuid.UUID        `json:"id"`
+	Fullname    string           `json:"fullname"`
+	Email       pgtype.Text      `json:"email"`
+	Phone       pgtype.Text      `json:"phone"`
+	Address     pgtype.Text      `json:"address"`
+	Role        string           `json:"role"`
+	CreatedAt   pgtype.Timestamp `json:"created_at"`
+	UpdatedAt   pgtype.Timestamp `json:"updated_at"`
+	CommunityID uuid.UUID        `json:"community_id"`
+	ID_2        uuid.UUID        `json:"id_2"`
+	RtNumber    int32            `json:"rt_number"`
+	RwNumber    int32            `json:"rw_number"`
+	Subdistrict string           `json:"subdistrict"`
+	District    string           `json:"district"`
+	City        string           `json:"city"`
+	Province    string           `json:"province"`
+	CreatedAt_2 pgtype.Timestamp `json:"created_at_2"`
+	UpdatedAt_2 pgtype.Timestamp `json:"updated_at_2"`
+}
+
+func (q *Queries) FindUserByCommunityID(ctx context.Context, communityID uuid.UUID) ([]FindUserByCommunityIDRow, error) {
+	rows, err := q.db.Query(ctx, findUserByCommunityID, communityID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FindUserByCommunityIDRow
+	for rows.Next() {
+		var i FindUserByCommunityIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Fullname,
+			&i.Email,
+			&i.Phone,
+			&i.Address,
+			&i.Role,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CommunityID,
+			&i.ID_2,
+			&i.RtNumber,
+			&i.RwNumber,
+			&i.Subdistrict,
+			&i.District,
+			&i.City,
+			&i.Province,
+			&i.CreatedAt_2,
+			&i.UpdatedAt_2,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const findUserByID = `-- name: FindUserByID :one
+select
+  u.id, u.fullname, u.email, u.phone, u.address, u.role, u.created_at, u.updated_at, u.community_id,
+  c.id, c.rt_number, c.rw_number, c.subdistrict, c.district, c.city, c.province, c.created_at, c.updated_at
+from users u
+inner join communities c on c.id = u.community_id
+where
+  (
+    $1::uuid is null or 
+    u.id = $1::uuid
+  )
+  and
+  (
+    $2::text is null or 
+    u.email = $2::text
+  )
+  and
+  (
+    $3::text is null or 
+    u.phone = $3::text
+  )
+  and
+  (
+    $4::uuid is null or
+    u.community_id = $4::uuid
+  )
+`
+
+type FindUserByIDParams struct {
+	ID          pgtype.UUID `json:"id"`
+	Email       pgtype.Text `json:"email"`
+	Phone       pgtype.Text `json:"phone"`
+	CommunityID pgtype.UUID `json:"community_id"`
+}
+
+type FindUserByIDRow struct {
+	ID          uuid.UUID        `json:"id"`
+	Fullname    string           `json:"fullname"`
+	Email       pgtype.Text      `json:"email"`
+	Phone       pgtype.Text      `json:"phone"`
+	Address     pgtype.Text      `json:"address"`
+	Role        string           `json:"role"`
+	CreatedAt   pgtype.Timestamp `json:"created_at"`
+	UpdatedAt   pgtype.Timestamp `json:"updated_at"`
+	CommunityID uuid.UUID        `json:"community_id"`
+	ID_2        uuid.UUID        `json:"id_2"`
+	RtNumber    int32            `json:"rt_number"`
+	RwNumber    int32            `json:"rw_number"`
+	Subdistrict string           `json:"subdistrict"`
+	District    string           `json:"district"`
+	City        string           `json:"city"`
+	Province    string           `json:"province"`
+	CreatedAt_2 pgtype.Timestamp `json:"created_at_2"`
+	UpdatedAt_2 pgtype.Timestamp `json:"updated_at_2"`
+}
+
+func (q *Queries) FindUserByID(ctx context.Context, arg FindUserByIDParams) (FindUserByIDRow, error) {
+	row := q.db.QueryRow(ctx, findUserByID,
+		arg.ID,
+		arg.Email,
+		arg.Phone,
+		arg.CommunityID,
+	)
 	var i FindUserByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.Fullname,
+		&i.Email,
+		&i.Phone,
+		&i.Address,
 		&i.Role,
-		&i.IsConfirmed,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CommunityID,
@@ -59,7 +173,6 @@ func (q *Queries) FindUserByID(ctx context.Context, id uuid.UUID) (FindUserByIDR
 		&i.District,
 		&i.City,
 		&i.Province,
-		&i.IsConfirmed_2,
 		&i.CreatedAt_2,
 		&i.UpdatedAt_2,
 	)
@@ -74,9 +187,8 @@ insert into communities (
     subdistrict,
     district,
     city,
-    province,
-    is_confirmed
-) values ($1, $2, $3, $4, $5, $6, $7, $8)
+    province
+) values ($1, $2, $3, $4, $5, $6, $7)
 returning id
 `
 
@@ -88,7 +200,6 @@ type InsertCommunityParams struct {
 	District    string    `json:"district"`
 	City        string    `json:"city"`
 	Province    string    `json:"province"`
-	IsConfirmed bool      `json:"is_confirmed"`
 }
 
 func (q *Queries) InsertCommunity(ctx context.Context, arg InsertCommunityParams) (uuid.UUID, error) {
@@ -100,7 +211,6 @@ func (q *Queries) InsertCommunity(ctx context.Context, arg InsertCommunityParams
 		arg.District,
 		arg.City,
 		arg.Province,
-		arg.IsConfirmed,
 	)
 	var id uuid.UUID
 	err := row.Scan(&id)
@@ -112,18 +222,22 @@ insert into users (
     id,
     community_id,
     fullname,
-    role,
-    is_confirmed
-) values ($1, $2, $3, $4, $5)
+    email,
+    phone,
+    address,
+    role
+) values ($1, $2, $3, $4, $5, $6, $7)
 returning id
 `
 
 type InsertUserParams struct {
-	ID          uuid.UUID `json:"id"`
-	CommunityID uuid.UUID `json:"community_id"`
-	Fullname    string    `json:"fullname"`
-	Role        string    `json:"role"`
-	IsConfirmed bool      `json:"is_confirmed"`
+	ID          uuid.UUID   `json:"id"`
+	CommunityID uuid.UUID   `json:"community_id"`
+	Fullname    string      `json:"fullname"`
+	Email       pgtype.Text `json:"email"`
+	Phone       pgtype.Text `json:"phone"`
+	Address     pgtype.Text `json:"address"`
+	Role        string      `json:"role"`
 }
 
 func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (uuid.UUID, error) {
@@ -131,46 +245,74 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (uuid.UU
 		arg.ID,
 		arg.CommunityID,
 		arg.Fullname,
+		arg.Email,
+		arg.Phone,
+		arg.Address,
 		arg.Role,
-		arg.IsConfirmed,
 	)
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
 }
 
-const updateCommunityStatus = `-- name: UpdateCommunityStatus :exec
-update communities
-set is_confirmed = $1
-where id = (
-  select u.community_id
-  from users u
-  where u.id = $2
+const isEmailExists = `-- name: IsEmailExists :one
+select exists(
+  select 1 from users where email = $1
 )
 `
 
-type UpdateCommunityStatusParams struct {
-	IsConfirmed bool      `json:"is_confirmed"`
-	ID          uuid.UUID `json:"id"`
+func (q *Queries) IsEmailExists(ctx context.Context, email pgtype.Text) (bool, error) {
+	row := q.db.QueryRow(ctx, isEmailExists, email)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
-func (q *Queries) UpdateCommunityStatus(ctx context.Context, arg UpdateCommunityStatusParams) error {
-	_, err := q.db.Exec(ctx, updateCommunityStatus, arg.IsConfirmed, arg.ID)
-	return err
-}
-
-const updateUserStatus = `-- name: UpdateUserStatus :exec
-update users
-set is_confirmed = $1
-where id = $2
+const isPhoneExists = `-- name: IsPhoneExists :one
+select exists(
+  select 1 from users where phone = $1
+)
 `
 
-type UpdateUserStatusParams struct {
-	IsConfirmed bool      `json:"is_confirmed"`
-	ID          uuid.UUID `json:"id"`
+func (q *Queries) IsPhoneExists(ctx context.Context, phone pgtype.Text) (bool, error) {
+	row := q.db.QueryRow(ctx, isPhoneExists, phone)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
-func (q *Queries) UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) error {
-	_, err := q.db.Exec(ctx, updateUserStatus, arg.IsConfirmed, arg.ID)
-	return err
+const updateUser = `-- name: UpdateUser :one
+update users
+set
+  fullname = coalesce($1::text, fullname),
+  email = coalesce($2::text, email),
+  phone = coalesce($3::text, phone),
+  address = coalesce($4, address),
+  role = coalesce($5::text, role)
+where
+  id = $6::uuid
+returning id
+`
+
+type UpdateUserParams struct {
+	Fullname pgtype.Text `json:"fullname"`
+	Email    pgtype.Text `json:"email"`
+	Phone    pgtype.Text `json:"phone"`
+	Address  pgtype.Text `json:"address"`
+	Role     pgtype.Text `json:"role"`
+	ID       uuid.UUID   `json:"id"`
+}
+
+func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, updateUser,
+		arg.Fullname,
+		arg.Email,
+		arg.Phone,
+		arg.Address,
+		arg.Role,
+		arg.ID,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }

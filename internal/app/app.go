@@ -13,6 +13,7 @@ import (
 	"github.com/dvvnFrtn/capstone-backend/config"
 	"github.com/dvvnFrtn/capstone-backend/infra/db"
 	"github.com/dvvnFrtn/capstone-backend/internal/handler"
+	"github.com/dvvnFrtn/capstone-backend/internal/handler/middleware"
 	"github.com/dvvnFrtn/capstone-backend/internal/service"
 	"github.com/dvvnFrtn/capstone-backend/pkg/authx"
 	"github.com/gin-gonic/gin"
@@ -32,15 +33,21 @@ func Run() {
 		log.Fatal("failed to connect database: ", err)
 	}
 
+	firebaseClient, err := authx.InitFirebase(context.Background(), os.Getenv("FIREBASE_KEY_PATH"))
+	if err != nil {
+		log.Fatal("failed to init firebase: ", err)
+	}
+
 	var (
+		logger      = slog.Default()
 		router      = gin.Default()
-		authClient  = authx.NewSupabase()
-		authService = service.NewSupabaseAuthService(authClient)
+		authService = service.NewFirebaseAuthService(firebaseClient.Auth)
+		firebaseMw  = middleware.NewFirebaseAuthMiddleware(firebaseClient.Auth)
 		userService = service.NewUserService(conn, authService)
-		userHandler = handler.NewUserHandler(slog.Default(), userService)
+		userHandler = handler.NewUserHandler(logger, userService)
 	)
 
-	handler.Register(router, userHandler)
+	handler.Register(router, logger, userHandler, *firebaseMw)
 	server := &http.Server{
 		Addr:    os.Getenv("APP_HOST"),
 		Handler: router,

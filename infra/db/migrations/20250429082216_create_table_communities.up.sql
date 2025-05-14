@@ -6,7 +6,6 @@ create table if not exists communities (
     district varchar not null,
     city varchar not null,
     province varchar not null,
-    is_confirmed boolean not null,
     created_at timestamp default current_timestamp,
     updated_at timestamp default current_timestamp
 );

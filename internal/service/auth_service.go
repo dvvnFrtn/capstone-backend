@@ -1,175 +1,91 @@
 package service
 
 import (
-	"encoding/json"
-	"strings"
+	"context"
 
+	"firebase.google.com/go/v4/auth"
 	"github.com/dvvnFrtn/capstone-backend/pkg/errs"
 	"github.com/google/uuid"
-	"github.com/supabase-community/auth-go"
-	"github.com/supabase-community/auth-go/types"
 )
 
 type AuthService interface {
-	Signup(req SignupRequest) (*SignupResponse, error)
-	VerifyOTP(req VerifyOTPRequest) (*VerifyOTPResponse, error)
-	Login(req LoginRequest) (*LoginResponse, error)
+	CreateAccount(ctx context.Context, req CreateAccountInput, claims map[string]interface{}) error
+	DeleteAccount(ctx context.Context, uID uuid.UUID) error
+	UpdateAccount(ctx context.Context, req UpdateAccountInput) error
 }
 
-type supabaseAuthService struct {
-	client auth.Client
+type firebaseAuthService struct {
+	client *auth.Client
 }
 
-func NewSupabaseAuthService(client auth.Client) AuthService {
-	return &supabaseAuthService{
+func NewFirebaseAuthService(client *auth.Client) AuthService {
+	return &firebaseAuthService{
 		client: client,
 	}
 }
 
-type SignupRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+type CreateAccountInput struct {
+	UID      uuid.UUID
+	Email    string
+	Phone    string
+	Password string
 }
 
-type SignupResponse struct {
-	ID    uuid.UUID `json:"id"`
-	Email string    `json:"email"`
+type UpdateAccountInput struct {
+	CreateAccountInput
 }
 
-func (s *supabaseAuthService) Signup(req SignupRequest) (*SignupResponse, error) {
-	const op errs.Op = "service.auth.SignUp"
+func (s *firebaseAuthService) CreateAccount(ctx context.Context, req CreateAccountInput, claims map[string]interface{}) error {
+	const op errs.Op = "service.auth.CreateAccount"
 
-	result, err := s.client.Signup(types.SignupRequest{
-		Email:    req.Email,
-		Password: req.Password,
-	})
+	params := (&auth.UserToCreate{}).PhoneNumber(req.Phone).Password(req.Password).UID(req.UID.String()).EmailVerified(false)
+	if req.Email != "" {
+		params = params.Email(req.Email)
+	}
+
+	user, err := s.client.CreateUser(ctx, params)
 	if err != nil {
-		parsedErr, parseErr := parseSupabaseAuthError(err)
-		if parseErr != nil {
-			return nil, errs.New(op, errs.Internal, err)
-		} else {
-			return nil, mapSupabaseAuthError(op, parsedErr, err)
-		}
-	}
-	if len(result.Identities) == 0 {
-		return nil, errs.New(op, errs.BadRequest, errs.Msg("Email sudah terdaftar, silahkan login"), err)
+		return errs.New(op, err, errs.Internal)
 	}
 
-	return &SignupResponse{
-		ID:    result.ID,
-		Email: result.Email,
-	}, nil
-}
-
-type VerifyOTPRequest struct {
-	Type  string `json:"type"`
-	Email string `json:"email"`
-	Phone string `json:"phone"`
-	Token string `json:"token"`
-}
-
-type VerifyOTPResponse struct {
-	ID           uuid.UUID `json:"_"`
-	AccessToken  string    `json:"access_token"`
-	RefreshToken string    `json:"refresh_token"`
-}
-
-func (s *supabaseAuthService) VerifyOTP(req VerifyOTPRequest) (*VerifyOTPResponse, error) {
-	const op errs.Op = "service.auth.VerifyOTP"
-
-	result, err := s.client.VerifyForUser(types.VerifyForUserRequest{
-		Type:       types.VerificationType(req.Type),
-		Token:      req.Token,
-		Email:      req.Email,
-		RedirectTo: "http://localhost:8000",
-	})
+	err = s.client.SetCustomUserClaims(ctx, user.UID, claims)
 	if err != nil {
-		parsedErr, parseErr := parseSupabaseAuthError(err)
-		if parseErr != nil {
-			return nil, errs.New(op, errs.Internal, err)
-		} else {
-			return nil, mapSupabaseAuthError(op, parsedErr, err)
-		}
-	}
-	return &VerifyOTPResponse{
-		ID:           result.User.ID,
-		AccessToken:  result.AccessToken,
-		RefreshToken: result.RefreshToken,
-	}, nil
-}
-
-type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type LoginResponse struct {
-	ID           uuid.UUID `json:"_"`
-	AccessToken  string    `json:"access_token"`
-	RefreshToken string    `json:"refresh_token"`
-}
-
-func (s *supabaseAuthService) Login(req LoginRequest) (*LoginResponse, error) {
-	const op errs.Op = "service.auth.Login"
-
-	result, err := s.client.SignInWithEmailPassword(req.Email, req.Password)
-	if err != nil {
-		parsedErr, parseErr := parseSupabaseAuthError(err)
-		if parseErr != nil {
-			return nil, errs.New(op, errs.Internal, err)
-		} else {
-			return nil, mapSupabaseAuthError(op, parsedErr, err)
-		}
-	}
-	return &LoginResponse{
-		ID:           result.User.ID,
-		AccessToken:  result.AccessToken,
-		RefreshToken: result.RefreshToken,
-	}, nil
-}
-
-type SupabaseAuthError struct {
-	Code      int    `json:"code"`
-	ErrorCode string `json:"error_code"`
-	Message   string `json:"msg"`
-}
-
-func (sp *SupabaseAuthError) Error() string {
-	return sp.Message
-}
-
-func parseSupabaseAuthError(err error) (*SupabaseAuthError, error) {
-	if err == nil {
-		return nil, nil
+		return errs.New(op, err, errs.Internal)
 	}
 
-	parts := strings.SplitN(err.Error(), ":", 2)
-	if len(parts) < 2 {
-		return nil, err
-	}
-
-	jsonPart := strings.TrimSpace(parts[1])
-	var supabaseErr SupabaseAuthError
-	if unmarshalErr := json.Unmarshal([]byte(jsonPart), &supabaseErr); unmarshalErr != nil {
-		return nil, err
-	}
-
-	return &supabaseErr, nil
+	return nil
 }
 
-func mapSupabaseAuthError(op errs.Op, serr *SupabaseAuthError, original error) error {
-	switch serr.ErrorCode {
-	case "otp_expired":
-		return errs.New(op, errs.OTPExpired, errs.Msg("OTP telah kadaluwarsa"), original)
-	case "over_email_send_rate_limit":
-		return errs.New(op, errs.RateLimit, errs.Msg("Terlalu banyak request, tunggu beberapa saat lagi"), original)
-	case "over_request_rate_limit":
-		return errs.New(op, errs.RateLimit, errs.Msg("Terlalu banyak request, tunggu beberapa saat lagi"), original)
-	case "email_address_invalid":
-		return errs.New(op, errs.BadRequest, errs.Msg("Alamat email tidak valid"), original)
-	case "email_address_not_authorized":
-		return errs.New(op, errs.BadRequest, errs.Msg("Alamat email tidak valid"), original)
-	default:
-		return errs.New(op, errs.Internal, original)
+func (s *firebaseAuthService) DeleteAccount(ctx context.Context, uID uuid.UUID) error {
+	const op errs.Op = "service.auth.DeleteAccount"
+
+	if err := s.client.DeleteUser(ctx, uID.String()); err != nil {
+		return errs.New(op, err, errs.Internal)
+	} else {
+		return nil
+	}
+}
+
+func (s *firebaseAuthService) UpdateAccount(ctx context.Context, req UpdateAccountInput) error {
+	const op errs.Op = "service.auth.UpdateAccount"
+
+	params := &auth.UserToUpdate{}
+
+	if req.Email != "" {
+		params = params.Email(req.Email)
+	}
+
+	if req.Password != "" {
+		params = params.Password(req.Password)
+	}
+
+	if req.Phone != "" {
+		params = params.PhoneNumber(req.Phone)
+	}
+
+	if _, err := s.client.UpdateUser(ctx, req.UID.String(), params); err != nil {
+		return errs.New(op, err, errs.Internal)
+	} else {
+		return nil
 	}
 }
