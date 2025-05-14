@@ -2,63 +2,87 @@ package middleware
 
 import (
 	"log/slog"
-	"os"
+	"slices"
 	"strings"
 
+	"firebase.google.com/go/v4/auth"
 	"github.com/dvvnFrtn/capstone-backend/internal/handler/response"
 	"github.com/dvvnFrtn/capstone-backend/pkg/errs"
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v4"
 )
 
-func MustAuthenticated(logger *slog.Logger) gin.HandlerFunc {
+type UserClaims struct {
+	UID         string
+	Role        string
+	CommunityID string
+}
+
+type Firebase struct {
+	Client *auth.Client
+}
+
+func NewFirebaseAuthMiddleware(client *auth.Client) *Firebase {
+	return &Firebase{Client: client}
+}
+
+func (f *Firebase) MustAuthenticated(logger *slog.Logger) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		const op errs.Op = "middleware.MustAuthenticated"
-		authorization := ctx.GetHeader("Authorization")
-		if authorization == "" {
-			response.SendRESTError(ctx, logger, errs.New(op, errs.Unauthorize, "authorization header is missing"))
+		const op errs.Op = "middleware.firebase.MustAuthenticated"
+
+		authHeader := ctx.GetHeader("Authorization")
+		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+			response.SendRESTError(ctx, logger, errs.New(op, errs.Unauthorize, "missing or invalid authorization header"))
 			ctx.Abort()
 			return
 		}
 
-		if !strings.HasPrefix(authorization, "Bearer ") {
-			response.SendRESTError(ctx, logger, errs.New(op, errs.Unauthorize, "authorization header format must be 'Bearer <token>'"))
-			ctx.Abort()
-			return
-		}
+		idToken := strings.TrimPrefix(authHeader, "Bearer ")
 
-		accessToken := authorization[7:]
-
-		claims, err := VerifyToken(accessToken)
+		token, err := f.Client.VerifyIDToken(ctx, idToken)
 		if err != nil {
-			response.SendRESTError(ctx, logger, err)
+			response.SendRESTError(ctx, logger, errs.New(op, errs.Unauthorize, "invalid token"))
 			ctx.Abort()
 			return
 		}
 
-		ctx.Set("claims", claims)
+		userClaims := &UserClaims{
+			UID:         token.UID,
+			Role:        toString(token.Claims["role"]),
+			CommunityID: toString(token.Claims["community_id"]),
+		}
+
+		ctx.Set("claims", userClaims)
 		ctx.Next()
 	}
 }
 
-func VerifyToken(t string) (jwt.MapClaims, error) {
-	const op errs.Op = "middleware.VerifyToken"
+func MustHaveRole(logger *slog.Logger, allowedRoles ...string) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		const op errs.Op = "middleware.auth.MustHaveRole"
+		user := GetUserClaims(ctx)
 
-	secret := []byte(os.Getenv("SUPABASE_SECRET_KEY"))
-
-	token, err := jwt.Parse(t, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errs.New(op, errs.Internal, "unexpected token siging method")
+		if slices.Contains(allowedRoles, user.Role) {
+			ctx.Next()
+			return
 		}
-		return secret, nil
-	})
-	if err != nil {
-		return nil, errs.New(op, errs.Unauthorize, err)
-	}
 
-	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		return claims, nil
+		response.SendRESTError(ctx, logger, errs.New(op, errs.Forbidden, "insufficient role"))
+		ctx.Abort()
+	}
+}
+
+func toString(val interface{}) string {
+	if s, ok := val.(string); ok {
+		return s
+	}
+	return ""
+}
+
+func GetUserClaims(ctx *gin.Context) *UserClaims {
+	user, exists := ctx.Get("claims")
+	if !exists {
+		return nil
 	} else {
-		return nil, errs.New(op, errs.Unauthorize, "invalid token given")
+		return user.(*UserClaims)
 	}
 }

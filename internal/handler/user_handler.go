@@ -4,11 +4,12 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/dvvnFrtn/capstone-backend/internal/handler/middleware"
 	"github.com/dvvnFrtn/capstone-backend/internal/handler/response"
 	"github.com/dvvnFrtn/capstone-backend/internal/service"
 	"github.com/dvvnFrtn/capstone-backend/pkg/errs"
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/google/uuid"
 )
 
 type UserHandler struct {
@@ -38,70 +39,89 @@ func (h *UserHandler) AdminSignup(ctx *gin.Context) {
 		return
 	}
 
-	if res != nil {
-		response.SendRESTSuccess(ctx, http.StatusOK, "Registrasi berhasil, silahkan cek email anda", res)
-		return
-	} else {
-		response.SendRESTSuccess(ctx, http.StatusOK, "Registrasi berhasil, silahkan cek email anda", nil)
-		return
-	}
+	response.SendRESTSuccess(ctx, http.StatusOK, "Registrasi berhasil, silahkan cek email anda", res)
 }
 
-func (h *UserHandler) VerifyOTP(ctx *gin.Context) {
-	const op errs.Op = "handler.user.VerifyOTP"
+func (h *UserHandler) AdminCreateUser(ctx *gin.Context) {
+	const op errs.Op = "handler.user.AdminCreateUser"
 
-	var req service.VerifyOTPRequest
+	var req service.AdminCreateUserRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		response.SendRESTError(ctx, h.logger, errs.New(op, errs.BadRequest, errs.Msg("Request tidak valid"), err))
 		return
 	}
 
-	res, err := h.userService.VerifySignUp(ctx, req)
+	claims := middleware.GetUserClaims(ctx)
+
+	res, err := h.userService.AdminCreateUser(ctx, claims, req)
 	if err != nil {
 		response.SendRESTError(ctx, h.logger, err)
 		return
 	}
 
-	response.SendRESTSuccess(ctx, http.StatusOK, "Verifikasi email telah berhasil", res)
+	response.SendRESTSuccess(ctx, http.StatusCreated, "Akun berhasil disimpan", res)
 }
 
-func (h *UserHandler) UserLogin(ctx *gin.Context) {
-	const op errs.Op = "handler.user.UserLogin"
+func (h *UserHandler) GetUser(ctx *gin.Context) {
+	const op errs.Op = "handler.user.GetUser"
 
-	var req service.LoginRequest
+	userID := ctx.Param("userID")
+	claims := middleware.GetUserClaims(ctx)
+
+	res, err := h.userService.GetUser(ctx, claims, uuid.MustParse(userID))
+	if err != nil {
+		response.SendRESTError(ctx, h.logger, err)
+		return
+	}
+
+	response.SendRESTSuccess(ctx, http.StatusCreated, "Akun berhasil dimuat", res)
+}
+
+func (h *UserHandler) GetUsersCommunity(ctx *gin.Context) {
+	const op errs.Op = "handler.user.GetUsersCommunity"
+
+	claims := middleware.GetUserClaims(ctx)
+
+	res, err := h.userService.GetUserFromCommunity(ctx, claims)
+	if err != nil {
+		response.SendRESTError(ctx, h.logger, err)
+		return
+	}
+
+	response.SendRESTSuccess(ctx, http.StatusCreated, "Akun berhasil dimuat", res)
+}
+
+func (h *UserHandler) AdminUpdateUser(ctx *gin.Context) {
+	const op errs.Op = "handler.user.AdminUpdateUser"
+
+	var req service.AdminUpdateUserRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		response.SendRESTError(ctx, h.logger, errs.New(op, errs.BadRequest, errs.Msg("Request tidak valid"), err))
 		return
 	}
 
-	res, err := h.userService.UserLogin(ctx, req)
+	userID := ctx.Param("userID")
+	claims := middleware.GetUserClaims(ctx)
+
+	res, err := h.userService.AdminUpdateUser(ctx, claims, uuid.MustParse(userID), req)
 	if err != nil {
 		response.SendRESTError(ctx, h.logger, err)
 		return
 	}
 
-	response.SendRESTSuccess(ctx, http.StatusOK, "Login telah berhasil", res)
+	response.SendRESTSuccess(ctx, http.StatusCreated, "Akun berhasil diperbarui", res)
 }
 
-func (h *UserHandler) GetAuthUser(ctx *gin.Context) {
-	const op errs.Op = "handler.user.GetAuthUser"
+func (h *UserHandler) AdminDeleteUser(ctx *gin.Context) {
+	const op errs.Op = "handler.user.AdminDeleteUser"
 
-	raw, exists := ctx.Get("claims")
-	if !exists {
-		response.SendRESTError(ctx, h.logger, errs.New(op, errs.Unauthorize, "missing claims"))
-		return
-	}
-	claims, ok := raw.(jwt.MapClaims)
-	if !ok {
-		response.SendRESTError(ctx, h.logger, errs.New(op, errs.Unauthorize, "invalid claims"))
-		return
-	}
+	userID := ctx.Param("userID")
+	claims := middleware.GetUserClaims(ctx)
 
-	res, err := h.userService.GetAuthenticatedUser(ctx, claims)
-	if err != nil {
+	if err := h.userService.AdminDeleteUser(ctx, claims, uuid.MustParse(userID)); err != nil {
 		response.SendRESTError(ctx, h.logger, err)
 		return
 	}
 
-	response.SendRESTSuccess(ctx, http.StatusOK, "Berhasil memuat data pengguna", res)
+	response.SendRESTSuccess(ctx, http.StatusOK, "Akun berhasil dihapus", nil)
 }

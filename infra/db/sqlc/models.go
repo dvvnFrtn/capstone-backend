@@ -17,7 +17,6 @@ type Community struct {
 	District    string           `json:"district"`
 	City        string           `json:"city"`
 	Province    string           `json:"province"`
-	IsConfirmed bool             `json:"is_confirmed"`
 	CreatedAt   pgtype.Timestamp `json:"created_at"`
 	UpdatedAt   pgtype.Timestamp `json:"updated_at"`
 }
@@ -25,8 +24,10 @@ type Community struct {
 type User struct {
 	ID          uuid.UUID        `json:"id"`
 	Fullname    string           `json:"fullname"`
+	Email       pgtype.Text      `json:"email"`
+	Phone       pgtype.Text      `json:"phone"`
+	Address     pgtype.Text      `json:"address"`
 	Role        string           `json:"role"`
-	IsConfirmed bool             `json:"is_confirmed"`
 	CreatedAt   pgtype.Timestamp `json:"created_at"`
 	UpdatedAt   pgtype.Timestamp `json:"updated_at"`
 	CommunityID uuid.UUID        `json:"community_id"`
